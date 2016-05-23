@@ -16,11 +16,6 @@ from kivy.storage.jsonstore import JsonStore
 from kivy.uix.widget import Widget
 from os.path import join
 
-from kivy.uix.textinput import TextInput
-from kivy.uix.spinner import Spinner, SpinnerOption
-from kivy.uix.checkbox import CheckBox
-from kivy.uix.button import Button
-
 
 class DataMode:
     file = 'file'
@@ -235,33 +230,3 @@ class WidgetLogger(Widget):
 
     def on_spinner_text(self, instance, value):
         KL.log.insert(action=LogAction.spinner, obj=self.name, comment=value)
-
-
-class MySpinnerOption(SpinnerOption):
-    pass
-
-
-class MySpinner(WidgetLogger, Spinner):
-    pass
-
-
-class LoggedText(WidgetLogger, TextInput):
-    the_text = ''
-
-
-class LoggedButton(WidgetLogger, Button):
-    pass
-
-
-class LoggedCheckBox(WidgetLogger, CheckBox):
-    pass
-
-
-class AnswerButton(WidgetLogger, CheckBox):
-    question = ""
-    answer = ""
-    form = None
-
-    def on_press(self, *args):
-        super(AnswerButton, self).on_press(*args)
-        self.form.set_answer(self.question, self.answer)
