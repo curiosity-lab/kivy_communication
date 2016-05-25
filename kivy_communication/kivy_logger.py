@@ -15,14 +15,20 @@ from kivy.logger import Logger
 from kivy.storage.jsonstore import JsonStore
 from kivy.uix.widget import Widget
 from os.path import join
+from twisted_client import *
 
 
+# Enum DataMode: file, encrupted, communication
 class DataMode:
     file = 'file'
     encrypted = 'encrypted'
     communication = 'communication'
 
+    def __init__(self):
+        pass
 
+
+# Enum: LogAction: non, press, play, stop, move, down, up, text, spinner, data
 class LogAction:
     none = 'none'
     press = 'press'
@@ -35,7 +41,11 @@ class LogAction:
     spinner = 'spinner'
     data = 'data'
 
+    def __init__(self):
+        pass
 
+
+# the static class for the kivy logger
 class KL:
     log = None
 
@@ -49,12 +59,15 @@ class KL:
             Logger.info("KL mode:" + str(mode))
         KL.log.set_mode(mode)
 
+    def __init__(self):
+        pass
 
+
+# THE class
 class KivyLogger:
     logs = []
     t0 = None
     base_mode = []
-    socket = None
     public_key = None
     filename = None
     pathname = ''
@@ -65,15 +78,8 @@ class KivyLogger:
         KivyLogger.logs = []
         KivyLogger.t0 = datetime.now()
 
-
     @staticmethod
-    def __del__():
-        if KivyLogger.socket is not None:
-            KivyLogger.socket.close()
-
-
-    @staticmethod
-    def set_mode(mode):
+    def set_mode(mode, the_ip=None):
         KivyLogger.base_mode = mode
         KivyLogger.t0 = datetime.now()
         if DataMode.file in KivyLogger.base_mode:
@@ -83,7 +89,7 @@ class KivyLogger:
             Logger.info("KivyLogger: " + str(KivyLogger.filename))
 
         if DataMode.communication in KivyLogger.base_mode:
-            KivyLogger.connect()
+            KivyLogger.connect(the_ip)
 
         if not is_pycrypto:
             if DataMode.encrypted in KivyLogger.base_mode:
@@ -92,35 +98,6 @@ class KivyLogger:
         if DataMode.encrypted in KivyLogger.base_mode:
             KivyLogger.get_public_key()
             KivyLogger.save('public_key:' + KivyLogger.public_key.exportKey("PEM"))
-
-    @staticmethod
-    def connect():
-        try:
-            KivyLogger.socket = socket.socket()
-            host = socket.gethostbyaddr('192.168.43.70')
-            Logger.info(("host:" + str(host)))
-            port = 12345
-            KivyLogger.socket.connect((host[0], port))
-        except:
-            KivyLogger.base_mode.remove(DataMode.communication)
-            Logger.info("connect: fail")
-        pass
-
-    @staticmethod
-    def get_public_key():
-        if DataMode.communication in KivyLogger.base_mode:
-            # get from communication
-            pub_pem = KivyLogger.socket.recv(1024)
-        else:
-            private_key = RSA.generate(2048, e=65537)
-            prv_pem = private_key.exportKey("PEM")
-            store = JsonStore(KivyLogger.filename + '.enc')
-            store.put('private_key', pem=prv_pem)
-
-            pub_pem = private_key.publickey().exportKey("PEM")
-
-        KivyLogger.public_key = RSA.importKey(pub_pem)
-        pass
 
     @staticmethod
     def reset():
@@ -147,7 +124,7 @@ class KivyLogger:
         if DataMode.file in mode:
             KivyLogger.save(data_str)
 
-
+    # file
     @staticmethod
     def save(data_str):
         #print(data_str)
@@ -162,6 +139,7 @@ class KivyLogger:
         except:
             Logger.info("save: did not work")
 
+    # encryption
     @staticmethod
     def to_str(log):
         data = {'time': log['time'].strftime('%Y_%m_%d_%H_%M_%S_%f'),
@@ -171,17 +149,49 @@ class KivyLogger:
         return str(json.dumps(data))
 
     @staticmethod
+    def get_public_key():
+        if DataMode.communication in KivyLogger.base_mode:
+            # get from communication
+            pub_pem = KivyLogger.socket.recv(1024)
+        else:
+            private_key = RSA.generate(2048, e=65537)
+            prv_pem = private_key.exportKey("PEM")
+            store = JsonStore(KivyLogger.filename + '.enc')
+            store.put('private_key', pem=prv_pem)
+
+            pub_pem = private_key.publickey().exportKey("PEM")
+
+        KivyLogger.public_key = RSA.importKey(pub_pem)
+        pass
+
+    @staticmethod
     def encrypt(data_str):
         if DataMode.encrypted in KivyLogger.base_mode:
             data_str = KivyLogger.public_key.encrypt(data_str, 32)
             return data_str
         return data_str
 
+    # communication
+    @staticmethod
+    def connect(the_ip=None):
+        try:
+            KC.client = TwistedClient(the_parent=KivyLogger)
+            KC.client.connect_to_server(the_ip)
+        except:
+            KivyLogger.base_mode.remove(DataMode.communication)
+            Logger.info("connect: fail")
+        pass
+
     @staticmethod
     def send_data(data_str):
         if DataMode.communication in KivyLogger.base_mode:
-            KivyLogger.socket.send(data_str.encode())
+            KC.client.send_message(data_str.encode())
         pass
+
+    @staticmethod
+    def __del__():
+        if KivyLogger.socket is not None:
+            KivyLogger.socket.close()
 
 
 class WidgetLogger(Widget):

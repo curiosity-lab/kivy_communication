@@ -17,7 +17,7 @@ class LoggedSpinner(WidgetLogger, Spinner):
 
 
 class LoggedTextInput(WidgetLogger, TextInput):
-    the_text = ''
+    pass
 
 
 class LoggedButton(WidgetLogger, Button):

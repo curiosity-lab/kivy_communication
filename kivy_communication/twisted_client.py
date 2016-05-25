@@ -3,6 +3,19 @@ from kivy.support import install_twisted_reactor
 install_twisted_reactor()
 #A simple Client that send messages to the echo server
 from twisted.internet import reactor, protocol
+from kivy.event import EventDispatcher
+
+
+# the static class for the kivy communication
+class KC:
+    client = None
+
+    @staticmethod
+    def start(the_parents=None, the_ip=None):
+        KC.client = TwistedClient(the_parents=the_parents, the_ip=the_ip)
+
+    def __init__(self):
+        pass
 
 
 class EchoClient(protocol.Protocol):
@@ -14,7 +27,7 @@ class EchoClient(protocol.Protocol):
         self.factory.client.on_connection(self.transport)
 
     def dataReceived(self, data):
-        self.factory.client.print_message(data)
+        self.factory.client.data_received(data)
 
 
 class EchoFactory(protocol.ClientFactory):
@@ -24,47 +37,84 @@ class EchoFactory(protocol.ClientFactory):
         self.client = client
 
     def clientConnectionLost(self, conn, reason):
-        self.client.print_message("connection lost")
+        self.client.send_status("connection lost")
 
     def clientConnectionFailed(self, conn, reason):
-        self.client.print_message("connection failed")
+        self.client.send_status("connection failed")
 
 
 class TwistedClient:
     connection = None
-    parent = None
+    parents = None
     ip = None
 
-    def __init__(self, the_parent=None, the_ip=None):
-        self.parent = the_parent
-        self.ip = the_ip
+    def __init__(self, the_parents=None, the_ip=None):
+        TwistedClient.parents = the_parents
+        TwistedClient.ip = the_ip
 
-    def connect_to_server(self, the_ip=None):
+    @staticmethod
+    def add_parent(the_parent):
+        if TwistedClient.parent is None:
+            TwistedClient.parents = []
+        TwistedClient.parents.append(the_parent)
+
+    @staticmethod
+    def connect_to_server(the_ip=None):
         if the_ip:
-            self.ip = the_ip
-        if self.ip:
-            self.print_message('connecting...')
-            reactor.connectTCP(the_ip.text, 8000, EchoFactory(self))
+            TwistedClient.ip = the_ip
+        if TwistedClient.ip:
+            TwistedClient.send_status('connecting')
+            reactor.connectTCP(the_ip.text, 8000, EchoFactory(TwistedClient))
         else:
-            self.print_message('missing ip!')
+            TwistedClient.print_message('missing ip!')
 
-    def on_connection(self, connection):
-        self.print_message("connected successfully!")
-        self.connection = connection
+    @staticmethod
+    def on_connection(connection):
+        TwistedClient.send_status("connected successfully!")
+        TwistedClient.connection = connection
 
-    def send_message(self, *args):
+    @staticmethod
+    def send_message(*args):
         try:
             msg = args[0]
-            if msg and self.connection:
-                self.connection.write(msg)
+            if msg and TwistedClient.connection:
+                TwistedClient.connection.write(msg)
         except:
-            self.print_message('incorrect message')
+            TwistedClient.send_status('incorrect message')
 
-    def print_message(self, msg):
-        if self.parent:
-            try:
-                self.parent.print_message(msg)
-                return
-            except:
-                pass
-        print("message: ", msg)
+    @staticmethod
+    def send_status(status):
+        if TwistedClient.parents is not None:
+            for p in TwistedClient.parents:
+                try:
+                    p.send_status(status)
+                except:
+                    pass
+        print('status: ', status)
+
+    @staticmethod
+    def data_received(data):
+        if TwistedClient.parents is not None:
+            for p in TwistedClient.parents:
+                try:
+                    p.data_received(data)
+                except:
+                    pass
+        print('data: ', data)
+
+''' Example usage:
+    def init_kc(self):
+        KC.start(the_parents=[self], the_ip='127.0.0.1')
+
+    def connect_to_server(self, *args):
+        KC.client.connect_to_server(args[0])
+
+    def send_message(self, *args):
+        KC.client.send_message(str(args[0].text))
+
+    def data_received(self, msg, *args):
+        self.label.text += msg + '\n'
+
+    def send_status(self, msg, *args):
+        self.label.text += msg + '\n'
+'''
