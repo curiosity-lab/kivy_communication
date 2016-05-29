@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import json
-import socket
 
 is_pycrypto = True
 try:
@@ -23,6 +22,7 @@ class DataMode:
     file = 'file'
     encrypted = 'encrypted'
     communication = 'communication'
+    ros = 'ros'
 
     def __init__(self):
         pass
@@ -50,9 +50,18 @@ class KL:
     log = None
 
     @staticmethod
-    def start(mode=None, pathname=''):
+    def start(mode=None, pathname=None, the_ip=None):
+        if not pathname:
+            return
+
         KL.log = KivyLogger
         KL.log.pathname = pathname
+
+        if not the_ip:
+            KL.log.configure()
+        else:
+            KL.log.ip = the_ip
+
         print(pathname)
         if mode is None:
             mode = []
@@ -70,8 +79,23 @@ class KivyLogger:
     base_mode = []
     public_key = None
     filename = None
-    pathname = ''
     store = None
+
+    pathname = ''
+    ip = None
+
+    @staticmethod
+    def configure():
+        try:
+            the_file = KL.log.pathname + '/../kivy_communication/config.json'
+            print(the_file)
+            with open(the_file) as json_file:
+                json_data = json.load(json_file)
+
+            KL.log.ip = str(json_data['ip'])
+        except:
+            print('no json configure file')
+            pass
 
     @staticmethod
     def __init__():
@@ -79,7 +103,7 @@ class KivyLogger:
         KivyLogger.t0 = datetime.now()
 
     @staticmethod
-    def set_mode(mode, the_ip=None):
+    def set_mode(mode):
         KivyLogger.base_mode = mode
         KivyLogger.t0 = datetime.now()
         if DataMode.file in KivyLogger.base_mode:
@@ -89,7 +113,7 @@ class KivyLogger:
             Logger.info("KivyLogger: " + str(KivyLogger.filename))
 
         if DataMode.communication in KivyLogger.base_mode:
-            KivyLogger.connect(the_ip)
+            KivyLogger.connect()
 
         if not is_pycrypto:
             if DataMode.encrypted in KivyLogger.base_mode:
@@ -146,6 +170,8 @@ class KivyLogger:
                 'action': log['action'],
                 'obj': log['obj'],
                 'comment': log['comment']}
+        if DataMode.ros in KivyLogger.base_mode:
+            data = {'log': data}
         return str(json.dumps(data))
 
     @staticmethod
@@ -173,10 +199,10 @@ class KivyLogger:
 
     # communication
     @staticmethod
-    def connect(the_ip=None):
+    def connect():
         try:
-            KC.client = TwistedClient(the_parent=KivyLogger)
-            KC.client.connect_to_server(the_ip)
+            KC.client = TwistedClient(the_ip=KL.log.ip)
+            KC.client.connect_to_server(KC.client.ip)
         except:
             KivyLogger.base_mode.remove(DataMode.communication)
             Logger.info("connect: fail")
@@ -240,3 +266,14 @@ class WidgetLogger(Widget):
 
     def on_spinner_text(self, instance, value):
         KL.log.insert(action=LogAction.spinner, obj=self.name, comment=value)
+
+    def force_on_touch_down(self, touch):
+        self.log_touch(LogAction.down, touch)
+
+    def force_on_touch_up(self, touch):
+        self.log_touch(LogAction.up, touch)
+
+''' Example usage:
+KL.start([DataMode.file], "/sdcard/curiosity/")#self.user_data_dir)
+# Logged* widgets
+'''
